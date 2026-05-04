@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Raciocínio Clínico: Microbiologia na UBS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Chosen Palette: Clinical Calm (Neutral grays, soft blues, pure white, with semantic feedback colors: red/green/yellow) -->
+    <!-- Application Structure Plan: The application is designed as an interactive medical simulator to best translate the decision-tree nature of the source report. Instead of reading a static document, the user experiences the clinical case chronologically. The structure includes: 1) A patient dashboard to present the case data clearly; 2) Interactive decision nodes (Nó 1 & 2) where users must commit to a clinical action; 3) Immediate feedback views explaining the consequences of their choices; 4) A dynamic debriefing dashboard at the end that uses a chart to visualize their "Stewardship Score" and provides tailored study plans based on their specific path. This forces active learning and better mimics real-world clinical pressure. -->
+    <!-- Visualization & Content Choices: 1. Patient Data -> Goal: Inform -> Method: Dashboard Cards (HTML/CSS) -> Justification: Mimics electronic health records for familiarity. 2. Decision Tree -> Goal: Change/Interact -> Method: Clickable Action Cards -> Justification: Forces active decision making. 3. Final Evaluation -> Goal: Inform/Compare -> Method: Chart.js Doughnut Chart -> Justification: Visually compares optimal stewardship vs iatrogenic harm based on user path (No SVG/Mermaid used). -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <style>
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 350px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        .fade-in {
+            animation: fadeIn 0.4s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+    <header class="bg-blue-900 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 class="text-xl font-bold tracking-tight">🩺 MedSim: Atenção Primária</h1>
+            <div class="text-sm bg-blue-800 px-3 py-1 rounded-full border border-blue-700">Módulo: Microbiologia Clínica</div>
+        </div>
+    </header>
+
+    <main class="flex-grow w-full max-w-5xl mx-auto px-4 py-8">
+        
+        <div id="view-intro" class="fade-in space-y-6">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 md:p-8">
+                <h2 class="text-2xl font-bold text-slate-900 mb-4">Bem-vindo ao Simulador de Casos Clínicos</h2>
+                <p class="text-lg text-slate-700 leading-relaxed mb-6">
+                    Este ambiente interativo foi desenhado para testar seu raciocínio clínico baseado em evidências e princípios de <strong>Antimicrobial Stewardship</strong> (Uso Racional de Antimicrobianos) no contexto da Atenção Primária (UBS/SUS). Você avaliará um paciente, interpretará exames e tomará decisões que alterarão o desfecho do caso.
+                </p>
+                <button id="btn-start" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg shadow transition-colors text-lg">
+                    Iniciar Atendimento
+                </button>
+            </div>
+        </div>
+
+        <div id="view-dashboard" class="hidden fade-in space-y-6">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <h2 class="text-xl font-bold text-slate-900 mb-2 border-b pb-2">📋 Prontuário Eletrônico</h2>
+                <p class="text-slate-600 mb-6 text-sm">Analise cuidadosamente a história clínica e os exames antes de prosseguir para a tomada de decisão.</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                        <div class="text-4xl mb-2">👩‍🦳</div>
+                        <h3 class="font-bold text-lg">Dona Maria, 72 anos</h3>
+                        <ul class="text-sm mt-2 space-y-1 text-slate-700">
+                            <li><strong>Motivo:</strong> Consulta de rotina (Hiperdia)</li>
+                            <li><strong>Comorbidades:</strong> DM2, HAS</li>
+                            <li><strong>Uso Contínuo:</strong> Metformina, Losartana</li>
+                            <li><strong>HbA1c:</strong> 7,2%</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 md:col-span-2">
+                        <h3 class="font-bold text-blue-900 text-lg flex items-center mb-2">
+                            <span class="mr-2">🗣️</span> Anamnese e Exame Físico
+                        </h3>
+                        <p class="text-slate-700 text-sm leading-relaxed">
+                            A paciente traz exames laboratoriais solicitados há duas semanas por outro profissional. Apresenta-se em excelente estado geral, ativa, corada e hidratada.
+                            <br><br>
+                            Ao ser questionada, é categórica: <strong>não sente absolutamente nada</strong>. Nega disúria (dor ao urinar), polaciúria, urgência miccional, dor lombar, febre ou calafrios. Sua urina tem aspecto e cheiro normais.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-5">
+                    <h3 class="font-bold text-yellow-900 text-lg mb-3 border-b border-yellow-200 pb-2">🔬 Resultados de Exames (Trazidos pela paciente)</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-800">
+                        <div>
+                            <p class="font-semibold text-slate-900 mb-1">EAS (Urina Tipo 1):</p>
+                            <ul class="list-disc pl-5 space-y-1">
+                                <li><span class="text-red-600 font-bold">Leucócitos: 15.000/mL</span> (Ref: &lt; 10.000/mL)</li>
+                                <li><span class="text-red-600 font-bold">Nitrito: Positivo</span></li>
+                                <li>Hemácias: 2.000/mL</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <p class="font-semibold text-slate-900 mb-1">Urocultura e Antibiograma:</p>
+                            <ul class="list-disc pl-5 space-y-1">
+                                <li><span class="text-red-600 font-bold">Crescimento de Escherichia coli &gt; 100.000 UFC/mL</span></li>
+                                <li>Perfil: Sensível à maioria dos antimicrobianos (Cefalexina, Nitrofurantoína, Fosfomicina, Ciprofloxacino).</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <div id="dynamic-context-text" class="text-slate-600 mb-4 text-sm italic border-l-4 border-blue-500 pl-3">
+                    Integração Fisiopatológica: Hospedeiro idoso e diabético, ambiente comunitário, presença de patógeno no trato urinário.
+                </div>
+                
+                <h2 id="question-title" class="text-2xl font-bold text-slate-900 mb-6">Nó 1: Qual é a sua conduta médica inicial?</h2>
+                
+                <div id="options-container" class="grid grid-cols-1 gap-4">
+                </div>
+            </div>
+        </div>
+
+        <div id="view-feedback" class="hidden fade-in space-y-6">
+            <div id="feedback-card" class="bg-white rounded-xl shadow-sm border-l-8 p-6 md:p-8">
+                <h2 id="feedback-title" class="text-2xl font-bold mb-4">Resultado da Intervenção</h2>
+                <div id="feedback-content" class="text-lg text-slate-700 leading-relaxed mb-6 space-y-4">
+                </div>
+                <button id="btn-continue" class="bg-slate-800 hover:bg-slate-900 text-white font-semibold py-3 px-8 rounded-lg shadow transition-colors">
+                    Continuar
+                </button>
+            </div>
+        </div>
+
+        <div id="view-debrief" class="hidden fade-in space-y-6">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 md:p-8">
+                <div class="text-center mb-8">
+                    <h2 class="text-3xl font-bold text-slate-900 mb-2">Avaliação de Desempenho</h2>
+                    <div id="final-classification" class="inline-block px-4 py-2 rounded-full text-xl font-bold text-white shadow-sm">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8 items-center">
+                    <div>
+                        <div class="chart-container">
+                            <canvas id="stewardshipChart"></canvas>
+                        </div>
+                        <p class="text-center text-xs text-slate-500 mt-2">Distribuição de impacto da conduta clínica escolhida.</p>
+                    </div>
+                    <div id="error-analysis-container" class="bg-red-50 border border-red-100 rounded-lg p-5">
+                        <h3 class="font-bold text-red-900 text-lg mb-3">📉 Análise de Conduta</h3>
+                        <ul id="error-analysis-list" class="list-disc pl-5 space-y-2 text-sm text-slate-800">
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="bg-blue-50 border border-blue-100 rounded-lg p-6">
+                    <h3 class="font-bold text-blue-900 text-xl mb-4 flex items-center">
+                        <span class="text-2xl mr-2">📚</span> Plano de Melhoria Recomendado
+                    </h3>
+                    <ul id="improvement-plan-list" class="space-y-3 text-slate-700">
+                        <li class="flex items-start">
+                            <span class="text-blue-500 mr-2">▶</span>
+                            <span><strong>Diretrizes Nacionais:</strong> Revisar os guidelines sobre "Bacteriúria Assintomática". Quais as únicas populações que se beneficiam de rastreio e tratamento? (Gestantes e profilaxia para procedimentos urológicos).</span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-blue-500 mr-2">▶</span>
+                            <span><strong>Efeitos Adversos:</strong> Estudar a cascata iatrogênica na Atenção Primária: Disbiose intestinal, colite por C. difficile e seleção de cepas multirresistentes (ESBL).</span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-blue-500 mr-2">▶</span>
+                            <span><strong>Interpretação de Exames:</strong> Revisar a interpretação do EAS. Leucocitúria em idosos é extremamente comum e não indica infecção sem a correlação clínica.</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="mt-8 text-center">
+                    <button onclick="location.reload()" class="bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold py-2 px-6 rounded-lg transition-colors">
+                        Reiniciar Simulação
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="bg-slate-800 text-slate-400 text-center py-6 mt-auto">
+        <p class="text-sm">Desenvolvido para treinamento em raciocínio clínico e Stewardship Antimicrobiano.</p>
+    </footer>
+
+    <script>
+        const appData = {
+            nodes: {
+                1: {
+                    title: "Nó 1: Qual é a sua conduta médica inicial?",
+                    context: "A paciente está na sua frente, assintomática, segurando os exames com asteriscos vermelhos indicando alterações na urocultura e EAS.",
+                    options: [
+                        { id: 'A', text: "Prescrever Ciprofloxacino por 7 dias. A urocultura tem mais de 100.000 UFC/mL, o que confirma infecção do trato urinário (ITU), e o ciprofloxacino é um excelente antimicrobiano de amplo espectro para garantir a eliminação do patógeno.", type: 'wrong', next: 2 },
+                        { id: 'B', text: "Prescrever Nitrofurantoína por 5 a 7 dias. Como ela é idosa e diabética, a imunidade é menor. Tratar precocemente evita a progressão para pielonefrite, usando um antibiótico de menor espectro para poupar a flora.", type: 'wrong', next: 2 },
+                        { id: 'C', text: "Solicitar uma nova Urocultura para confirmar o resultado antes de prescrever qualquer antimicrobiano. Como ela não tem sintomas, é prudente ter certeza de que não houve erro de laboratório ou contaminação da amostra.", type: 'suboptimal', next: 'end_adequate_c' },
+                        { id: 'D', text: "Tranquilizar a paciente, orientar sobre hidratação e não prescrever nenhum antimicrobiano. Explicar que se trata de uma Bacteriúria Assintomática, que é uma colonização esperada e inofensiva para o perfil dela.", type: 'correct', next: 'end_excellent' }
+                    ]
+                },
+                2: {
+                    title: "Nó 2 (Recuperação): Qual é a sua conduta agora perante esta complicação?",
+                    context: "⚠️ Duas semanas depois, Dona Maria retorna à UBS. Ela tomou o antibiótico que você prescreveu. Hoje, ela queixa-se de episódios de diarreia líquida (3x ao dia) há 4 dias. Além disso, assustada, fez nova urocultura particular que revelou: Crescimento de Klebsiella pneumoniae produtora de ESBL (resistente a quase tudo).",
+                    options: [
+                        { id: 'A', text: "Como a nova bactéria na urina é multirresistente (ESBL), prescrever Fosfomicina Trometamol e solicitar exame de fezes para investigar a diarreia.", type: 'wrong', next: 'end_critical' },
+                        { id: 'B', text: "Encaminhar a paciente imediatamente para a UPA ou hospital para internação e administração de Meropenem venoso (devido à ESBL), além de investigar colite pseudomembranosa.", type: 'wrong', next: 'end_critical' },
+                        { id: 'C', text: "Suspender qualquer medicação, prescrever loperamida (inibidor de motilidade) para parar a diarreia rapidamente e ignorar a urocultura.", type: 'wrong', next: 'end_critical_c' },
+                        { id: 'D', text: "Tranquilizar a paciente em relação à urina, explicando que a nova bactéria é apenas colonização selecionada pelo uso do antibiótico. Orientar hidratação oral vigorosa, observar a diarreia (suspender loperamida se usou) e focar no suporte da disbiose.", type: 'correct', next: 'end_adequate_recovery' }
+                    ]
+                }
+            },
+            feedback: {
+                '1-D': {
+                    title: "Conduta Excelente!",
+                    color: "border-green-500",
+                    text: "Excelente raciocínio! Você diferenciou perfeitamente **colonização de infecção**. A presença de bactérias e leucocitúria no exame, na ausência total de sintomas, configura Bacteriúria Assintomática. De acordo com os princípios de Stewardship, não devemos tratar em idosos ou diabéticos. O tratamento não previne ITU futura, não melhora a sobrevida e aumenta o risco de efeitos adversos."
+                },
+                '1-C': {
+                    title: "Conduta Segura, porém Subótima",
+                    color: "border-yellow-500",
+                    text: "Você evitou prescrever o antibiótico de forma errada, o que é bom. Contudo, repetir a cultura é uma conduta que gera medicalização desnecessária e desperdício de recursos. Se ela é assintomática, não há indicação de rastreio de urina, logo, confirmar a colonização não mudará a conduta de não tratar.<br><br><strong>Progressão:</strong> A segunda cultura voltou positiva. A paciente ficou ansiosa e precisou retornar à UBS à toa."
+                },
+                '1-wrong': {
+                    title: "Erro de Conduta - Risco Iatrogênico",
+                    color: "border-red-500",
+                    text: "Você baseou sua decisão exclusivamente no papel (exame) e ignorou a clínica (ausência de sintomas). Você tratou uma **colonização** como se fosse uma **infecção**. O uso de antimicrobianos neste cenário viola os princípios de Stewardship, expondo a paciente a toxicidade e pressão seletiva na microbiota."
+                },
+                '2-D': {
+                    title: "Recuperação Bem-sucedida!",
+                    color: "border-green-500",
+                    text: "Você percebeu a cascata de intervenções iatrogênicas (Efeito Stewardship reverso: o antibiótico anterior causou pressão seletiva, erradicando a E. coli sensível e permitindo a colonização pela Klebsiella ESBL). A diarreia provavelmente é uma disbiose. O foco correto é parar a iatrogenia e tratar a diarreia com suporte."
+                },
+                '2-wrong': {
+                    title: "Falha Crítica - Erro em Cadeia",
+                    color: "border-red-600",
+                    text: "Você continuou tratando o exame microbiológico e não a paciente. A paciente continua assintomática do ponto de vista urinário; interná-la ou prescrever mais antibiótico só aumentará a seleção de resistência multirresistente e o risco de megacólon tóxico pela disbiose associada a inibidores de motilidade."
+                }
+            },
+            evaluations: {
+                'end_excellent': { class: "Excelente", color: "bg-green-600", chart: [95, 5], errors: ["Nenhum erro grave detectado. Excelente integração clínico-laboratorial."] },
+                'end_adequate_c': { class: "Adequado", color: "bg-yellow-600", chart: [60, 40], errors: ["Excesso de exames: Repetir cultura em paciente assintomático gera ansiedade e desperdício financeiro."] },
+                'end_adequate_recovery': { class: "Adequado", color: "bg-yellow-600", chart: [50, 50], errors: ["Tratamento inicial incorreto de Bacteriúria Assintomática.", "Dificuldade inicial em diferenciar colonização de infecção.", "Apesar do erro, houve excelente percepção posterior para interromper a cascata iatrogênica."] },
+                'end_critical': { class: "Crítico", color: "bg-red-600", chart: [10, 90], errors: ["Tratamento de Bacteriúria Assintomática gerando disbiose.", "Uso de antibiótico de amplo espectro gerando cepa multirresistente (ESBL).", "Continuidade do erro ao tentar tratar nova colonização multirresistente sem correlação clínica."] },
+                'end_critical_c': { class: "Crítico", color: "bg-red-600", chart: [5, 95], errors: ["Tratamento de Bacteriúria Assintomática.", "Erro grave: Prescrição de loperamida para suspeita de diarreia por antibiótico, com alto risco de precipitar megacólon tóxico."] }
+            }
+        };
+
+        let state = {
+            currentNode: 1,
+            finalStatus: null,
+            chartInstance: null
+        };
+
+        const views = {
+            intro: document.getElementById('view-intro'),
+            dashboard: document.getElementById('view-dashboard'),
+            feedback: document.getElementById('view-feedback'),
+            debrief: document.getElementById('view-debrief')
+        };
+
+        function switchView(viewName) {
+            Object.values(views).forEach(v => v.classList.add('hidden'));
+            views[viewName].classList.remove('hidden');
+            window.scrollTo(0, 0);
+        }
+
+        document.getElementById('btn-start').addEventListener('click', () => {
+            renderNode(1);
+            switchView('dashboard');
+        });
+
+        document.getElementById('btn-continue').addEventListener('click', () => {
+            if (typeof state.finalStatus === 'string') {
+                renderDebrief(state.finalStatus);
+                switchView('debrief');
+            } else {
+                renderNode(state.currentNode);
+                switchView('dashboard');
+            }
+        });
+
+        function renderNode(nodeId) {
+            const nodeData = appData.nodes[nodeId];
+            document.getElementById('question-title').textContent = nodeData.title;
+            document.getElementById('dynamic-context-text').textContent = nodeData.context;
+            
+            if(nodeId === 2) {
+                document.getElementById('dynamic-context-text').classList.replace('border-blue-500', 'border-red-500');
+                document.getElementById('dynamic-context-text').classList.add('text-red-700', 'bg-red-50', 'p-3', 'rounded');
+            }
+
+            const container = document.getElementById('options-container');
+            container.innerHTML = '';
+
+            nodeData.options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = "text-left p-4 rounded-lg border border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white group";
+                btn.innerHTML = `<div class="flex items-start"><span class="font-bold text-blue-600 mr-3 mt-0.5 group-hover:text-blue-800">[${opt.id}]</span><span class="text-slate-700 group-hover:text-slate-900">${opt.text}</span></div>`;
+                btn.onclick = () => handleChoice(opt, nodeId);
+                container.appendChild(btn);
+            });
+        }
+
+        function handleChoice(option, nodeId) {
+            let feedbackKey = '';
+            
+            if (nodeId === 1) {
+                if (option.type === 'correct') { feedbackKey = '1-D'; state.finalStatus = option.next; }
+                else if (option.type === 'suboptimal') { feedbackKey = '1-C'; state.finalStatus = option.next; }
+                else { feedbackKey = '1-wrong'; state.currentNode = 2; state.finalStatus = null; }
+            } else if (nodeId === 2) {
+                if (option.type === 'correct') { feedbackKey = '2-D'; state.finalStatus = option.next; }
+                else { feedbackKey = '2-wrong'; state.finalStatus = option.next; }
+            }
+
+            renderFeedback(appData.feedback[feedbackKey]);
+            switchView('feedback');
+        }
+
+        function renderFeedback(feedbackData) {
+            document.getElementById('feedback-title').textContent = feedbackData.title;
+            document.getElementById('feedback-content').innerHTML = feedbackData.text;
+            
+            const card = document.getElementById('feedback-card');
+            card.className = `bg-white rounded-xl shadow-sm border-l-8 p-6 md:p-8 ${feedbackData.color}`;
+        }
+
+        function renderDebrief(finalStatus) {
+            const evalData = appData.evaluations[finalStatus];
+            
+            const badge = document.getElementById('final-classification');
+            badge.textContent = `Classificação: ${evalData.class}`;
+            badge.className = `inline-block px-6 py-2 rounded-full text-xl font-bold text-white shadow-sm ${evalData.color}`;
+
+            const errorList = document.getElementById('error-analysis-list');
+            errorList.innerHTML = '';
+            evalData.errors.forEach(err => {
+                const li = document.createElement('li');
+                li.innerHTML = err;
+                errorList.appendChild(li);
+            });
+            
+            const errContainer = document.getElementById('error-analysis-container');
+            if(evalData.class === "Excelente") {
+                errContainer.classList.replace('bg-red-50', 'bg-green-50');
+                errContainer.classList.replace('border-red-100', 'border-green-200');
+                errContainer.querySelector('h3').classList.replace('text-red-900', 'text-green-900');
+                errContainer.querySelector('h3').innerHTML = '✅ Análise de Conduta';
+            }
+
+            renderChart(evalData.chart);
+        }
+
+        function renderChart(dataValues) {
+            const ctx = document.getElementById('stewardshipChart').getContext('2d');
+            
+            if (state.chartInstance) {
+                state.chartInstance.destroy();
+            }
+
+            state.chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Práticas de Stewardship (%)', 'Risco Iatrogênico/Desperdício (%)'],
+                    datasets: [{
+                        data: dataValues,
+                        backgroundColor: [
+                            'rgba(34, 197, 94, 0.8)',
+                            'rgba(239, 68, 68, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgba(34, 197, 94, 1)',
+                            'rgba(239, 68, 68, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                font: { size: 12, family: "'Inter', sans-serif" },
+                                color: '#475569'
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return ' ' + context.label + ': ' + context.raw + '%';
+                                }
+                            }
+                        }
+                    },
+                    cutout: '65%'
+                }
+            });
+        }
+    </script>
+</body>
+</html>
